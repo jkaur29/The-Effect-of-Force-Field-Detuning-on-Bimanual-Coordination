@@ -1,0 +1,1205 @@
+---
+title: "AllCRP_DataAnalysis_AP"
+author: "Jaskanwaljeet Kaur"
+date: "4/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#We're calculating the mean and standard deviation (SD) continuous relative phase with this code (IN-PHASE MOVEMENT) for ALL SUBJECTS:
+```{r}
+library("readxl")
+library("psych")
+library("ggplot2") 
+library("ggpubr")
+library("ggsci")
+library("dplyr")
+library("PairedData")
+library("devtools")
+library("reshape")
+library("doBy")
+library("tidyverse")
+library("wesanderson")
+library("tinytex")
+library("lme4")
+library("broom.mixed")
+library("lattice")
+library("ggeffects")
+library("gridExtra")
+library("grid")
+library("stargazer")
+library("plotly")
+library("ggforce")
+library("ggridges")
+library("report")
+library("PupillometryR")
+```
+
+#This code is importing all the CRP data that includes mean and standard deviation below:
+```{r}
+
+setwd("~/Desktop/UC Merced - Grad School Stuff/2nd Year KINARM Project/Data_Analysis_Scripts_RStudio/AP_RawDataOnly")
+files = dir("~/Desktop/UC Merced - Grad School Stuff/2nd Year KINARM Project/Data_Analysis_Scripts_RStudio/AP_RawDataOnly")
+
+#all the outputs, puts them in a dataframe rowwise
+all_CRP_data = map_dfr(files, read_csv)
+print(all_CRP_data)
+```
+#This code seperates the file names of the imported datasets:
+```{r}
+#This line of code is separating the columns into multiple columns:
+all_CRP_data %>%
+  separate(File, into = c('Data', 'Movement_type','Participant', 'Trial','Trial_number','TP', 'TP_number', 'CRP'), sep = "_") -> all_data_seperate
+
+print(all_data_seperate)
+```
+#These lines of code are deleting the columns we don't need for further analysis:
+```{r}
+#This deletes the first column called "Data":
+df <- all_data_seperate[-1]
+df
+
+#This deletes the third column called "trial":
+df1 <- df[-3]
+df1
+
+#This deletes the fourth column called "TP":
+df2 <- df1[-4]
+df2
+
+#This deletes the fifth column called "ControlRelPhase", and creates the final name for the data file that will be used for further analysis:
+all_CRP_data_final <- df2[-5]
+all_CRP_data_final
+```
+#_______________
+#The code below is taking the file data file and calculating the average of the mean and SD for each trial protocol. For subject 2-8, there should be total of 16 conditions (8 for in-phase movement, and 8 for anti-phase movements). For subject 10-36, there should be 18 conditions (9 for in-phase movement and 9 for anti-phase movement):
+#TRIAL PROTOCOL FROM THE KINARM ROBOT IS SYNONYMOUS TO CONDITIONS (which will be used in the paper for this study as well)!
+```{r}
+all_CRP_data_final_avg <- all_CRP_data_final %>%
+group_by(TP_number) %>%
+summarise_at(vars(SD, mean),
+               list(avg = mean))
+print(all_CRP_data_final_avg)
+
+#This code rearranges or puts the trial protocols (Conditions) in serial order:
+all_CRP_data_final_avg %>%
+  arrange(factor(TP_number, levels = c('1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16'))) -> all_CRP_data_final_avg_desc
+
+print(all_CRP_data_final_avg_desc)
+```
+#This prints out the ODD number trial protocols, which means that all the conditions with the cycle period length of 750ms are being pulled out for further plotting:
+```{r}
+rows <- nrow(all_CRP_data_final_avg_desc)
+odd_rows <- seq_len(rows) %% 2
+data_mod <- all_CRP_data_final_avg_desc[odd_rows == 1, ]
+print(data_mod)
+
+condition_labels_750 <- c('1' = "No Load/No Load", '3' = "Elastic/Viscous", '5' = "Elastic/Elastic", '7' = "Viscous/Viscous", '9' = "No Load/Elastic", '11' = "Elastic/No Load", '13' = "Viscous/No Load", '15' = "No Load/Viscous", '17' = 'Viscous/Elastic')
+
+p2_750 <- ggplot(data_mod, aes(x=mean_avg, y=mean_avg, color = TP_number, fill = TP_number)) +
+  theme_bw()+
+  geom_col(alpha=1, width=5)+
+   geom_hline(yintercept = seq(0, 5, by = 5),
+              color = "grey", size = .2) +
+  geom_vline(xintercept = seq(0, 360, by = 90),
+             color = "grey", size = .2) +
+  coord_polar()+
+  facet_wrap(vars(TP_number), labeller = as_labeller(condition_labels_750)) +
+  theme(axis.text.x = element_text(size=8,colour = "black"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ylab("CRPΦ (degrees)") +
+  xlab("Load Condition") +
+  theme(legend.position = "none")+
+  ggtitle("Mean CRPΦ: 750ms Anti-Phase Movement") +
+  theme(plot.title = element_text(hjust = 0.5))
+p2_750
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("p2_750.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+#This prints out the EVEN number trial protocols, which means that all the conditions with the cycle period length of 1200ms are being pulled out for further plotting:
+```{r}
+rows1 <- nrow(all_CRP_data_final_avg_desc)
+odd_rows1 <- seq_len(rows1) %% 2
+data_mod1 <- all_CRP_data_final_avg_desc[odd_rows1 == 0, ]
+print(data_mod1)
+
+condition_labels_1200 <- c('2' = "No Load/No Load", '4' = "Elastic/Viscous", '6' = "Elastic/Elastic", '8' = "Viscous/Viscous", '10' = "No Load/Elastic", '12' = "Elastic/No Load", '14' = "Viscous/No Load", '16' = "No Load/Viscous", '18' = 'Viscous/Elastic')
+
+p2_1200 <- ggplot(data_mod1, aes(x=mean_avg, y=mean_avg, color = TP_number, fill = TP_number)) +
+  theme_bw()+
+  geom_col(alpha=1, width=5)+
+   geom_hline(yintercept = seq(0, 5, by = 5),
+              color = "grey", size = .2) +
+  geom_vline(xintercept = seq(0, 360, by = 90),
+             color = "grey", size = .2) +
+  coord_polar()+
+  facet_wrap(vars(TP_number), labeller = as_labeller(condition_labels_1200)) +
+  theme(axis.text.x = element_text(size=8,colour = "black"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ylab("CRPΦ (degrees)") +
+  xlab("Load Condition") +
+  theme(legend.position = "none")+
+ ggtitle("Mean CRPΦ: 1200ms Anti-Phase Movement") +
+  theme(plot.title = element_text(hjust = 0.5))
+p2_1200
+
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("p2_1200.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+#The code below plots the Continuous Relative Phase at different load conditions in the 750ms cycling frequency:
+```{r}
+print(all_CRP_data_final)
+
+#This code removes all the trial protocols that have the 1200ms cycling frequency and only keeps the 750ms (fast) cycling frequency:
+all_CRP_data_final_750 <- all_CRP_data_final[!(all_CRP_data_final$TP_number == "2" | all_CRP_data_final$TP_number == "4"| all_CRP_data_final$TP_number == "6"| all_CRP_data_final$TP_number == "8"|all_CRP_data_final$TP_number == "10"| all_CRP_data_final$TP_number == "12"| all_CRP_data_final$TP_number == "14"| all_CRP_data_final$TP_number == "16"| all_CRP_data_final$TP_number == "18"),]
+print(all_CRP_data_final_750)
+
+
+all_CRP_data_final_750_asec <- all_CRP_data_final_750[order(as.integer(all_CRP_data_final_750$TP_number),decreasing = FALSE),]
+print(all_CRP_data_final_750_asec)
+
+load_lables1 <- c('17' = "Elastic (L)/Viscous (R)", '15' = "Viscous (L)/No Load (R)", '13' = "No Load (L)/Viscous (R)", '11' = "No Load (L)/Elastic (R)", '9' = "Elastic (L)/No Load (R)", '7' = "Viscous (L)/Viscous (R)", '5' = "Elastic (L)/Elastic (R)", '3' = "Viscous (L)/Elastic (R)", '1' = "No Load(L)/No Load(R)")
+
+all_CRP_data_final_750_asec %>% ggplot(aes(x = factor(TP_number), y = mean)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_violin(alpha = 0, notch = TRUE) +
+  stat_summary(fun = "mean", geom = "point", color = "black")+
+  geom_jitter(alpha = 0.3, color = "red") +
+  #facet_wrap(vars(TP_number))+
+  ggtitle(label = "Relative Phase (Φ) Across Load Conditions",
+          subtitle = "(750ms Cycling Frequency)") +
+  theme(plot.title = element_text(hjust = 0.5, size = 12),
+        plot.subtitle = element_text(hjust = 0.5, size = 12)) +
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  labs(y = "Φ (degrees)",
+       x = "Load Condition")+
+  scale_x_discrete(limits = c("1","7","5","3","17","9","11","13","15"), labels = load_lables1)+
+  scale_y_continuous(limits = c(140,180))
+```
+##This plot below is plotting SDΦ:
+```{r}
+all_CRP_data_final_750_asec %>% ggplot(aes(x = factor(TP_number), y = SD)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_violin(alpha = 0, notch = TRUE) +
+  stat_summary(fun = "mean", geom = "point", color = "black") +
+  geom_jitter(alpha = 0.3, color = "blue") +
+  #facet_wrap(vars(TP_number))+
+  ggtitle(label = "Standard Deviation of Φ Across Load Conditions",
+          subtitle = "(750ms Cycling Frequency)") +
+  theme(plot.title = element_text(hjust = 0.5, size = 12),
+        plot.subtitle = element_text(hjust = 0.5, size = 12)) +
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  labs(y = "SDΦ (degrees)",
+       x = "Load Condition")+
+  scale_x_discrete(limits = c("1","7","5","3","17","9","11","13","15"), labels = load_lables1)+
+  scale_y_continuous(limits = c(0,30))
+```
+#The code below is plotting density plots, which indicates the spread of the distribution of the data. The data being plotted in the desity plots here/below includes data from all 30 participants, across 9 load conditions.
+```{r}
+print(all_CRP_data_final_750)
+all_CRP_data_final_750 %>%
+  arrange(as.integer(TP_number)) -> all_CRP_data_final_750_new_asec
+print(all_CRP_data_final_750_new_asec)
+
+condition_labels_750_new <- c('1' = "No Load (L)/No Load (R)", '3' = "Elastic (L)/Viscous (R)", '5' = "Elastic (L)/Elastic (R)", '7' = "Viscous (L)/Viscous (R)", '9' = "No Load (L)/Elastic (R)", '11' = "Elastic (L)/No Load (R)", '13' = "Viscous (L)/No Load (R)", '15' = "No Load (L)/Viscous (R)", '17' = 'Viscous (L)/Elastic (R)')
+
+##THIS MEAN CALCULATED BELOW IS USING EACH OF THE LOAD CONDITIONS (TP_NUMBER), IT NEEDS TO BE PLOTTED ON THE X-AXIS:
+library(dplyr)
+mean_CRP_750 <- all_CRP_data_final_750_asec %>%
+  group_by(TP_number) %>%
+  summarize(mean = mean(mean)) %>%
+print(mean_CRP_750)
+
+ggplot(all_CRP_data_final_750_asec)+
+  theme_bw()+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_density(aes(x = mean, fill = TP_number), alpha = 0.7)+
+  #coord_polar(theta = "x") +
+  facet_wrap(vars(TP_number), labeller = as_labeller(condition_labels_750_new)) +
+  theme(axis.text.x = element_text(size=8,colour = "black"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ylab("Load Condition") +
+  xlab("Continuous Relative Phase (CRP in degrees)")+
+  ggtitle(label = "Continuous Relative Phase (CRP) Across Load Conditions",
+          subtitle = "(750ms Cycling Frequency)") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position = "none") +
+  #geom_vline(xintercept=mean_CRP_750, size=1.5, color="red") +
+  xlim(c(140,180))
+
+ggplot(all_CRP_data_final_750_asec)+
+  theme_bw()+
+  geom_density(aes(x = mean, color=TP_number), alpha = 0.7)+
+  #coord_polar(theta = "x") +
+  #facet_wrap(vars(TP_number)) +
+  #coord_polar(theta = "x") +
+  theme(axis.text.x = element_text(size=8,colour = "black"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ylab("Load Condition") +
+  xlab("Continuous Relative Phase (CRP in degrees)")+
+  ggtitle(label = "Continuous Relative Phase (CRP) Across Load Conditions",
+          subtitle = "(1200ms Cycling Frequency)") +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+ xlim(c(140,180))
+
+
+#DON'T USE THIS PLOT BELOW. THIS IS A GREAT PLOT BUT IT NEEDS WORK!
+ggplot(all_CRP_data_final_750_asec)+
+  theme_bw()+
+  geom_density(aes(x = mean, color = TP_number, fill = TP_number), alpha = 0.4)+
+  geom_vline(xintercept = seq(0, 360, by = 90), color = "red", size = .2)+
+  coord_polar(theta = "x") +
+  facet_wrap(vars(TP_number), labeller = as_labeller(condition_labels_750_new)) +
+  theme(axis.text.x = element_text(size=8,colour = "black"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank()) +
+  ylab("Continuous Relative Phase (CRP in degrees)") +
+  xlab("Load Condition")
+```
+
+```{r}
+###MATCHED AND MIS-MATCHED CONDITIONS - 750MS PLOT:
+#Here we are just plotting both the matched and the mismatched load conditions together:
+allconditions_750 <- c('1' = "No Load (L)/No Load (R)", '3' = "Elastic (L)/Viscous (R)", '5' = "Elastic (L)/Elastic (R)", '7' = "Viscous (L)/Viscous (R)", '9' = "No Load (L)/Elastic (R)", '11' = "Elastic (L)/No Load (R)", '13' = "Viscous (L)/No Load (R)", '15' = "No Load (L)/Viscous (R)", '17' = 'Viscous (L)/Elastic (R)')
+
+allloadconditions_750ms <- ggplot(all_CRP_data_final_750_new_asec, aes(TP_number, mean, fill=TP_number)) +
+  geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.6) +
+  geom_jitter(alpha = 0.5,width = 0.15, aes(color=TP_number)) +
+  geom_boxplot(width = 0.25,  outlier.shape = NA, alpha = 0.4) + 
+  stat_summary(fun = mean, geom = "point", col = "black")+
+  stat_summary(fun = mean, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, aes(label = paste("Mean:", round(..y.., digits = 1))))+
+  ggtitle(label = "Relative Phase (Φ) All Load Conditons - AntiPhase Mode",
+          subtitle = "(750ms Cycling Frequency)") +
+  ylab("Φ (degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  scale_x_discrete(limits = c("1","7","5","13","15","11","9","17","3"), labels = allconditions_750)+
+  theme_classic() + 
+  coord_flip()+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(c(140,180))
+allloadconditions_750ms
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("allloadconditions_750ms.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+
+```{r}
+all_CRP_data_final_750_new_asec
+all_CRP_data_final_750_new_asec$intended_phase <- "180"
+all_CRP_data_final_750_new_asec$fast_or_slow <- "fast"
+all_CRP_data_final_750_new_asec
+
+CRP_data_final_750ms_intendphase <- all_CRP_data_final_750_new_asec
+print(CRP_data_final_750ms_intendphase)
+
+CRP_data_final_750ms_intendphase$deviation_from_intendphase <- (as.numeric(CRP_data_final_750ms_intendphase$intended_phase) - as.numeric(CRP_data_final_750ms_intendphase$mean))
+
+CRP_data_final_750ms_intendphase
+
+####_______________________________________________________________________
+#Here we are plotting the phase deviation information:
+CRP_data_750ms_phasedevplot <- ggplot(data = CRP_data_final_750ms_intendphase, mapping = aes(x = TP_number, y = mean, fill = TP_number, alpha = 0.5)) +
+  #geom_line(aes(color=TP_number))+
+  #geom_point(aes(color=TP_number), size=2.5)+
+  geom_violin(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_x_discrete(limits = c("1","7","5","13","15","11","9","17","3"), labels = allconditions_750)+
+  stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, hjust=1, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "750ms Cycling Frequency") +
+  ylab("Continuous Relative Phase (°)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  geom_hline(yintercept = 180, color = "red")+
+  geom_text(x=4, y = 182.5, adj=0, label="Intended Phase = 180°", color = "red")+
+  #annotate("text", x=1.3, y=143, label = "Phase Deviation:", fontface = "bold")+
+  #annotate("text", x=1, y=140, label = "9.0°", fontface = "bold")+
+  #annotate("text", x=2, y=140, label = "7.9°", fontface = "bold")+
+  #annotate("text", x=3, y=140, label = "17.5°", fontface = "bold")+
+  #annotate("text", x=4, y=140, label = "10.3°", fontface = "bold")+
+  #annotate("text", x=5, y=140, label = "11.7°", fontface = "bold")+
+  #annotate("text", x=6, y=140, label = "13.0°", fontface = "bold")+
+  #annotate("text", x=7, y=140, label = "12.8°", fontface = "bold")+
+  #annotate("text", x=8, y=140, label = "15.4°", fontface = "bold")+
+  #annotate("text", x=9, y=140, label = "16.1°", fontface = "bold")+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_blank(),axis.title.x=element_blank(), axis.title.y=element_blank()) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(140, 210) +
+  geom_signif(comparisons = list(c("1","7"), c("1", "5"), c("1","13"), c("1","15"), c("1","11"), c("1","9"), c("1","17"), c("1","3")),
+              map_signif_level = TRUE,
+              annotations = c("**", "***", "***", "***", "***", "***", "***", "***"), #Changing significance levels manually based on LMER modeling
+              margin_top = 0.05, step_increase = 0.08,  tip_length = 0.02)
+CRP_data_750ms_phasedevplot
+
+CRP_data_750ms_phasedevplot
+
+
+
+
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("CRP_data_750ms_phasedevplot.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+
+#USE THIS PLOT FOR THE NCM POSTER:
+```{r}
+all_CRP_data_final_750_new_asec
+all_CRP_data_final_750_new_asec$intended_phase <- "180"
+all_CRP_data_final_750_new_asec$fast_or_slow <- "fast"
+all_CRP_data_final_750_new_asec
+
+CRP_data_final_750ms_intendphase <- all_CRP_data_final_750_new_asec
+print(CRP_data_final_750ms_intendphase)
+
+CRP_data_final_750ms_intendphase$deviation_from_intendphase <- (as.numeric(CRP_data_final_750ms_intendphase$intended_phase) - as.numeric(CRP_data_final_750ms_intendphase$mean))
+
+CRP_data_final_750ms_intendphase
+
+
+####_______________________________________________________________________
+#Here we are plotting the phase deviation information:
+CRP_data_750ms_phasedevplot_ncmposter <- ggplot(data = CRP_data_final_750ms_intendphase, mapping = aes(x = TP_number, y = mean, fill = TP_number, alpha = 0.5)) +
+  #geom_line(aes(color=TP_number))+
+  #geom_point(aes(color=TP_number), size=2.5)+
+  geom_violin(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_color_manual(values=c("1" = "#56B4E9", "7" = "#56B4E9","5" = "#56B4E9","13" = "#CC79A7","15" = "#CC79A7","11" = "#CC79A7","9" = "#CC79A7", "17" = "#CC79A7","3" = "#CC79A7"))+
+  scale_x_discrete(limits = c("1","7","5","13","15","11","9","17","3"), labels = allconditions_750)+
+  stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, hjust=1, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Deviation of Mean Continuous Relative Phase (Φ) from Intended Phase",
+          subtitle = "Anti-phase Movement: 750ms Cycling Frequency")+
+  ylab("Continuous Relative Phase (°)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  geom_hline(yintercept = 180, color = "black")+
+  geom_text(x=4, y = 178.5, adj=0, label="Intended Phase = 180°", color = "black")+
+  geom_text(x=1.25, y = 141, adj=0, label="Matched Loads", color = "#56B4E9")+
+  geom_text(x=6, y = 141, adj=0, label="Mismatched Loads", color = "#CC79A7")+
+   geom_text(x=2, y=158,label = "**")+
+  geom_text(x=3, y=140,label = "***")+
+  geom_text(x=4, y=157,label = "***")+
+  geom_text(x=5, y=150,label = "***")+
+  geom_text(x=6, y=144,label = "***")+
+  geom_text(x=7, y=146,label = "***")+
+  geom_text(x=8, y=146,label = "***")+
+  geom_text(x=9, y=142,label = "***")+
+  scale_fill_manual(values = c("1" = "#56B4E9", "7" = "#56B4E9","5" = "#56B4E9","13" = "#CC79A7","15" = "#CC79A7","11" = "#CC79A7","9" = "#CC79A7", "17" = "#CC79A7","3" = "#CC79A7"))+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(angle = 60, hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(140, 180)
+CRP_data_750ms_phasedevplot_ncmposter
+
+#ggsave(file="CRP_data_750ms_phasedevplot_ncmposter.png", width = 7, height = 5, CRP_data_750ms_phasedevplot_ncmposter) #saves CRP_data_750ms_phasedevplot_ncmposter
+```
+
+```{r}
+#Here we are plotting the phase deviation information:
+CRP_data_750ms_SD_phasedevplot <- ggplot(data = CRP_data_final_750ms_intendphase, mapping = aes(x = TP_number, y = SD, fill = TP_number, alpha = 0.5)) +
+  #geom_line(aes(color=TP_number))+
+  #geom_point(aes(color=TP_number), size=2.5)+
+  geom_violin(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_x_discrete(limits = c("1","7","5","13","15","11","9","17","3"), labels = allconditions_750)+
+  stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, hjust=1, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Standard Deviation (SDΦ) All Load Conditons - AntiPhase Mode",
+          subtitle = "(750ms Cycling Frequency)") +
+  ylab("SDΦ (Degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  geom_hline(yintercept = 180, color = "red")+
+  geom_text(x=3.95, y = 181.2, adj=0, label="Intended Phase = 180°", color="red")+
+  annotate("text", x=1.3, y=143, label = "Phase Deviation:", fontface = "bold")+
+  annotate("text", x=1, y=140, label = "9°", fontface = "bold")+
+  annotate("text", x=2, y=140, label = "8°", fontface = "bold")+
+  annotate("text", x=3, y=140, label = "11°", fontface = "bold")+
+  annotate("text", x=4, y=140, label = "12°", fontface = "bold")+
+  annotate("text", x=5, y=140, label = "12°", fontface = "bold")+
+  annotate("text", x=6, y=140, label = "13°", fontface = "bold")+
+  annotate("text", x=7, y=140, label = "15°", fontface = "bold")+
+  annotate("text", x=8, y=140, label = "15°", fontface = "bold")+
+  annotate("text", x=9, y=140, label = "17°", fontface = "bold")+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(0, 30)
+CRP_data_750ms_SD_phasedevplot
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("CRP_data_1200ms_phasedevplot.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+
+```{r}
+hist(all_CRP_data_final_750_new_asec$mean)
+
+#allconditions_750 <- c('1' = "No Load (L)/No Load (R)", '3' = "Elastic (L)/Viscous (R)", '5' = "Elastic (L)/Elastic (R)", '7' = "Viscous (L)/Viscous (R)", '9' = "No Load (L)/Elastic (R)", '11' = "Elastic (L)/No Load (R)", '13' = "Viscous (L)/No Load (R)", '15' = "No Load (L)/Viscous (R)", '17' = 'Viscous (L)/Elastic (R)')
+
+all_CRP_data_final_750_new_asec$TP_number = factor(all_CRP_data_final_750_new_asec$TP_number, levels = c("1","7","5","13","15","11","9","17","3"))
+
+mixedmodel0_750 <- lmer(mean ~ TP_number + (1 | Trial_number) + (1 | Participant), data = all_CRP_data_final_750_new_asec)
+summary(mixedmodel0_750)
+
+sjPlot:: tab_model(mixedmodel0_750, p.val = "kr",
+                   pred.labels = c("Intercept (No load (L)/No load (R))", "Viscous (L)/Viscous (R)", "Elastic (L)/Elastic (R)","Viscous (L)/No Load (R)", "No Load (L)/Viscous (R)", "Elastic (L)/No Load (R)", "No Load (L)/Elastic (R)", "Viscous (L)/Elastic (R)", "Elastic (L)/Viscous (R)"),
+                   dv.labels= "Mean Anti-Phase (CRPΦ) - 750ms Cycling Frequency")
+
+
+
+#To investigate the estimated fixed effects coefficients:
+#fixef(mixedmodel0_750)
+
+#This function spits out the random effects estimates for specific participants and items.For linear models, the function returns the fixed effects coefficients; for linear mixed effects models, it returns the random effects estimates! The coef() output is a list, with one list element for every grouping factor. Each list element contains a data frame, which you can retrieve via the dollar sign ‘$’.
+#coef(mixedmodel0_750)
+
+plot(mixedmodel0_750)
+#Checking normality of residuals either via:
+#A Q-Q plot 
+qqnorm(resid(mixedmodel0_750))
+qqline(resid(mixedmodel0_750))
+#Or a histogram of residuals:
+hist(residuals(mixedmodel0_750))
+
+library("report")
+report::report(mixedmodel0_750)
+```
+```{r}
+library(ggeffects)
+first_model <- ggemmeans(mixedmodel0_750, terms = c("TP_number"))
+plot(first_model, facet = TRUE, colors = "hero")
+```
+
+#Contunous Relative phase (CRP) was found to significantly differ across all the 9 load conditions. The negative value indicates that participants we able to move better despite having mismatched load conditions. 
+```{r} 
+library(sjPlot)
+sjPlot::plot_model(mixedmodel0_750, show.values = TRUE, value.offset = .3, vline.color = "yellow", title = "Continuous Relative Phase Estimates", sort.est = TRUE) + theme_bw()
+
+#Spits out a nice table that can be used for presentation purposes:
+sjPlot:: tab_model(mixedmodel0_750,
+                   dv.labels= "Continuous Relative Phase (CRP)")
+```
+#The code below plots the Continuous Relative Phase at different load conditions in the 1200ms cycling frequency:
+```{r}
+library("PupillometryR")
+print(all_CRP_data_final)
+
+#This code removes all the trial protocols that have the 1200ms cycling frequency and only keeps the 750ms (fast) cycling frequency:
+all_CRP_data_final_1200 <- all_CRP_data_final[!(all_CRP_data_final$TP_number == "1" | all_CRP_data_final$TP_number == "3"| all_CRP_data_final$TP_number == "5"| all_CRP_data_final$TP_number == "7"|all_CRP_data_final$TP_number == "9"| all_CRP_data_final$TP_number == "11"| all_CRP_data_final$TP_number == "13"| all_CRP_data_final$TP_number == "15"| all_CRP_data_final$TP_number == "17"),]
+print(all_CRP_data_final_1200)
+
+all_CRP_data_final_1200_asec <- all_CRP_data_final_1200[order(as.integer(all_CRP_data_final_1200$TP_number),decreasing = FALSE),]
+print(all_CRP_data_final_1200_asec)
+
+load_lables2 <- c('18' = "Elastic (L)/Viscous (R)", '16' = "Viscous (L)/No Load (R)", '14' = "No Load (L)/Viscous (R)", '12' = "No Load (L)/Elastic (R)", '10' = "Elastic (L)/No Load (R)", '8' = "Viscous (L)/Viscous (R)", '6' = "Elastic (L)/Elastic (R)", '4' = "Viscous (L)/Elastic (R)", '2' = "No Load(L)/No Load(R)")
+
+all_CRP_data_final_1200_asec %>% ggplot2::ggplot(aes(x = factor(TP_number), y = mean)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_violin() +
+  stat_summary(fun = "mean", geom = "point", color = "black") +
+  geom_jitter(alpha = 0.3, color = "red") +
+  #facet_wrap(vars(TP_number))+
+  ggtitle(label = "Continuous Relative Phase (Φ) Across Load Conditions",
+          subtitle = "(1200ms Cycling Frequency)") +
+  theme(plot.title = element_text(hjust = 0.5, size = 12),
+        plot.subtitle = element_text(hjust = 0.5, size = 12)) +
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  labs(y = "Φ (degrees)",
+       x = "Load Condition") +
+  scale_x_discrete(limits = c("2","8","6","4","18","10","12","14","16"), labels = load_lables2) +
+  scale_y_continuous(limits = c(140,180))
+```
+#This plot below is plotting SDΦ:
+```{r}
+all_CRP_data_final_1200_asec %>% ggplot2::ggplot(aes(x = factor(TP_number), y = SD)) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  geom_violin() +
+  stat_summary(fun = "mean", geom = "point", color = "black") +
+   stat_summary(fun = mean, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, aes(label = paste("Mean:", round(..y.., digits = 1))))+
+  geom_jitter(alpha = 0.3, color = "blue") +
+  #facet_wrap(vars(TP_number))+
+  ggtitle(label = "Variability of the Continuous Relative Phase",
+          subtitle = "(1200ms Cycling Frequency)") +
+  theme(plot.title = element_text(hjust = 0.5, size = 12),
+        plot.subtitle = element_text(hjust = 0.5, size = 12)) +
+  theme(axis.text.x=element_text(angle=45,hjust=1))+
+  labs(y = "SDΦ",
+       x = "Load Condition") +
+  scale_x_discrete(limits = c("2","8","6","4","18","10","12","14","16"), labels = load_lables2)+
+  scale_y_continuous(limits = c(0,30))
+```
+#Here we are plotting the relative phase distribution of various load conditions with the mean of all participants plotted on the distributions. This shows how varying laods seem to affect bimanual coordination movement.
+```{r}
+
+print(all_CRP_data_final_1200_asec)
+all_CRP_data_final_1200_asec %>%
+  arrange(as.integer(TP_number)) -> all_CRP_data_final_1200_new_asec
+print(all_CRP_data_final_1200_new_asec)
+
+###MATCHED AND MIS-MATCHED CONDITIONS - 1200MS PLOT:
+#Here we are just plotting both the matched and the mismatched load conditions together:
+allconditions_1200 <- c('2' = "No Load (L)/No Load (R)", '4' = "Elastic (L)/Viscous (R)", '6' = "Elastic (L)/Elastic (R)", '8' = "Viscous (L)/Viscous (R)", '10' = "No Load (L)/Elastic (R)", '12' = "Elastic (L)/No Load (R)", '14' = "Viscous (L)/No Load (R)", '16' = "No Load (L)/Viscous (R)", '18' = 'Viscous (L)/Elastic (R)')
+
+allloadconditions_1200ms <- ggplot(all_CRP_data_final_1200_new_asec, aes(TP_number, mean, fill=TP_number)) +
+  geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.6) +
+  geom_jitter(alpha = 0.5,width = 0.15, aes(color=TP_number)) +
+  geom_boxplot(width = 0.25,  outlier.shape = NA, alpha = 0.4) + 
+  stat_summary(fun = mean, geom = "point", col = "black")+
+  stat_summary(fun = mean, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, aes(label = paste("Mean:", round(..y.., digits = 1))))+
+  ggtitle(label = "Relative Phase (Φ) All Load Conditons - AntiPhase Mode",
+          subtitle = "(1200ms Cycling Frequency)") +
+  ylab("Φ (degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  scale_x_discrete(limits = c("2","8","6","14","16","12","10","18","4"), labels = allconditions_1200)+
+  theme_classic() + 
+  coord_flip()+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(c(140,180))
+allloadconditions_1200ms
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("allloadconditions_1200ms.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+##ABOUT THE PLOT ABOVE:
+#This plot is showing the distributions of the mean continuous relative phase on bimanual movement. The x-axis indicates the relative phase and the y-axis shows the different load conditions. The black dots are indicating the mean relative phase of each of the different load conditions.
+
+#This code adds the intended phase (which in the case of anti-phase movements is 180 degrees) and then substracts the intended phase from the phase of the actual movement. So, in a perfect world when there's no forces that are being applied the intended relative phase is 180 degrees, and the "deviation_from_intendedphase" column gives us how many degrees away from 180 the current phase is.
+```{r}
+all_CRP_data_final_1200_new_asec
+all_CRP_data_final_1200_new_asec$intended_phase <- "180"
+all_CRP_data_final_1200_new_asec$fast_or_slow <- "slow"
+all_CRP_data_final_1200_new_asec
+
+#This is calculating the intended phase:
+CRP_data_final_1200ms_intendphase <- all_CRP_data_final_1200_new_asec
+print(CRP_data_final_1200ms_intendphase)
+
+CRP_data_final_1200ms_intendphase$deviation_from_intendphase <- (as.numeric(CRP_data_final_1200ms_intendphase$intended_phase) - as.numeric(CRP_data_final_1200ms_intendphase$mean))
+
+CRP_data_final_1200ms_intendphase
+
+#Here we are plotting the phase deviation information:
+CRP_data_1200ms_phasedevplot <- ggplot(data = CRP_data_final_1200ms_intendphase, mapping = aes(x = TP_number, y = mean, fill = TP_number, alpha = 0.5)) +
+  #geom_line(aes(color=TP_number))+
+  #geom_point(aes(color=TP_number), size=2.5)+
+  geom_violin(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_x_discrete(limits = c("2","8","6","14","16","12","10","18","4"), labels = allconditions_1200)+
+  stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, hjust=1, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "1200ms Cycling Frequency") +
+  ylab("Continuous Relative Phase (°)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  geom_hline(yintercept = 180, color = "red")+
+  geom_text(x=4, y = 182.5, adj=0, label="Intended Phase = 180°", color="red")+
+  #annotate("text", x=1.3, y=143, label = "Phase Deviation:", fontface = "bold")+
+  #annotate("text", x=1, y=140, label = "8.8°", fontface = "bold")+
+  #annotate("text", x=2, y=140, label = "8.3°", fontface = "bold")+
+  #annotate("text", x=3, y=140, label = "17.5°", fontface = "bold")+
+  #annotate("text", x=4, y=140, label = "11.0°", fontface = "bold")+
+  #annotate("text", x=5, y=140, label = "11.8°", fontface = "bold")+
+  #annotate("text", x=6, y=140, label = "12.2°", fontface = "bold")+
+  #annotate("text", x=7, y=140, label = "12.7°", fontface = "bold")+
+  #annotate("text", x=8, y=140, label = "15.2°", fontface = "bold")+
+  #annotate("text", x=9, y=140, label = "15.2°", fontface = "bold")+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(angle = 60, hjust=1),axis.title.x=element_blank(), axis.title.y=element_blank()) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(140, 210)+
+  geom_signif(comparisons = list(c("2","8"), c("2", "6"), c("2","14"), c("2","16"), c("2","12"), c("2","10"), c("2","18"), c("2","4")),
+              map_signif_level = TRUE,
+              annotations = c("***", "***", "***", "***", "***", "***", "***", "***"), #Changing significance levels manually based on LMER modeling
+              margin_top = 0.05, step_increase = 0.08,  tip_length = 0.02) +
+  ylim(NA,210)
+CRP_data_1200ms_phasedevplot
+
+#CRP_data_1200ms_phasedevplot + coord_flip() #this flips the coordinate so that the plots look a lot nicer
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("CRP_data_1200ms_phasedevplot.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+#This plot is showing the relative phase on the y-axis and the different load conditions on the x-axis. The black dots are indicating the mean relative phase of each of the different load conditions across all 33 participants. If you look at this red line, it's showing the intended relative phase of 180 degrees. This means that if an individual is executing a perfect anti-phase movement, their relative phase would be centered at 180 degrees. So, starting with the first condition, where no loads are applied we can see that the mean relative phase is 171 degrees, indicating that participants tended to deviate about 9 degrees from the intended relative phase when they're moving in their natural frequency (without any loads). As we move along the x-axis, in the viscous/viscous load condition (which is the less disruptive load) we see that participants deviated by about 8 degrees here. Now in the mismatched force conditions, we see an increase when it comes to phase deviation. If the forces are on one arm then the deviation increases. So, overtime what you're seeing here is that when different load conditions are applied, the mean relative phase tends to deviate away from the intended phase, showcasing the effect that these load conditions have during bimanual movement.
+
+#The reason the mismatched forces tend to deviate less is potentially due having one less disruptive force on one arm. For example, during the elastic/viscous force, participants tended to focus on the viscouse force when performing the movement causing the viscous force arm to just follow and because to this the deviation from the intended phase is greater when elastic/elastic foces are on both arms compared to mismatched forces when moving in the anti-phase direction.
+
+
+
+#combining both plots for easier viewing on a poster:
+```{r}
+
+# arrange both plots
+grid.arrange(CRP_data_750ms_phasedevplot, CRP_data_1200ms_phasedevplot)
+
+#save
+combined_AP_ncmposer <- arrangeGrob(CRP_data_750ms_phasedevplot, CRP_data_1200ms_phasedevplot) #generates combined_AP_ncmposer
+
+#ggsave(file="combined_AP_ncmposer.pdf", combined_AP_ncmposer) #saves combined_AP_ncmposer
+
+```
+
+
+
+
+
+#~~~~~~~~~~~~
+
+#USE THIS PLOT FOR THE NCM POSTER:
+```{r}
+all_CRP_data_final_1200_new_asec
+all_CRP_data_final_1200_new_asec$intended_phase <- "180"
+all_CRP_data_final_1200_new_asec$fast_or_slow <- "slow"
+all_CRP_data_final_1200_new_asec
+
+#This is calculating the intended phase:
+CRP_data_final_1200ms_intendphase <- all_CRP_data_final_1200_new_asec
+print(CRP_data_final_1200ms_intendphase)
+
+CRP_data_final_1200ms_intendphase$deviation_from_intendphase <- (as.numeric(CRP_data_final_1200ms_intendphase$intended_phase) - as.numeric(CRP_data_final_1200ms_intendphase$mean))
+
+CRP_data_final_1200ms_intendphase
+
+#Here we are plotting the phase deviation information:
+CRP_data_1200ms_phasedevplot_ncmposter <- ggplot(data = CRP_data_final_1200ms_intendphase, mapping = aes(x = TP_number, y = mean, fill = TP_number, alpha = 0.5)) +
+  #geom_line(aes(color=TP_number))+
+  #geom_point(aes(color=TP_number), size=2.5)+
+  geom_violin(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_color_manual(values=c("2" = "#56B4E9", "8" = "#56B4E9","6" = "#56B4E9","14" = "#CC79A7","16" = "#CC79A7","12" = "#CC79A7","10" = "#CC79A7", "18" = "#CC79A7","4" = "#CC79A7"))+
+  scale_x_discrete(limits = c("2","8","6","14","16","12","10","18","4"), labels = allconditions_1200)+
+  stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, hjust=1, aes(label = paste(round(..y.., digits = 1))))+
+   ggtitle(label = "Deviation of Mean Continuous Relative Phase (Φ) from Intended Phase",
+           subtitle = "Anti-phase Movement: 1200ms Cycling Frequency") +
+  ylab("Continuous Relative Phase (°)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  geom_hline(yintercept = 180, color = "black")+
+  geom_text(x=4, y = 178.5, adj=0, label="Intended Phase = 180°", color = "black")+
+  geom_text(x=1.25, y = 141, adj=0, label="Matched Loads", color = "#56B4E9")+
+  geom_text(x=6, y = 141, adj=0, label="Mismatched Loads", color = "#CC79A7")+
+  geom_text(x=2, y=160,label = "NS")+
+  geom_text(x=3, y=140,label = "***")+
+  geom_text(x=4, y=150,label = "***")+
+  geom_text(x=5, y=145,label = "***")+
+  geom_text(x=6, y=150,label = "***")+
+  geom_text(x=7, y=143,label = "***")+
+  geom_text(x=8, y=143,label = "***")+
+  geom_text(x=9, y=142,label = "***")+
+  scale_fill_manual(values = c("2" = "#56B4E9", "8" = "#56B4E9","6" = "#56B4E9","14" = "#CC79A7","16" = "#CC79A7","12" = "#CC79A7","10" = "#CC79A7", "18" = "#CC79A7","4" = "#CC79A7"))+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(angle = 55, hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(140, 180)
+CRP_data_1200ms_phasedevplot_ncmposter
+
+
+#ggsave(file="CRP_data_1200ms_phasedevplot_ncmposter.png", width = 7, height = 5, CRP_data_1200ms_phasedevplot_ncmposter) #saves CRP_data_1200ms_phasedevplot_ncmposter
+
+#USE THIS line of code below to save a png, it looks better on a poster (less pixelated):
+#ggsave('CRP_data_1200ms_phasedevplot_ncmposter.png', width = 7, height = 5)
+```
+#combining both plots for easier viewing on a poster:
+```{r}
+
+# arrange both plots
+grid.arrange(CRP_data_750ms_phasedevplot_ncmposter, CRP_data_1200ms_phasedevplot_ncmposter)
+
+#save
+combined_AP_ncmposer <- arrangeGrob(CRP_data_750ms_phasedevplot_ncmposter, CRP_data_1200ms_phasedevplot_ncmposter) #generates combined_AP_ncmposer
+
+#ggsave(file="combined_AP_ncmposer.pdf", combined_AP_ncmposer) #saves combined_AP_ncmposer
+
+```
+
+
+
+```{r}
+hist(all_CRP_data_final_1200_new_asec$mean)
+
+#This code puts the intercept as the no load/no load condition and compares the that conditions against all the other condition:
+all_CRP_data_final_1200_new_asec$TP_number = factor(all_CRP_data_final_1200_new_asec$TP_number, levels = c("2","8","6","14","16","12","10","18","4"))
+
+mixedmodel0_1200 <- lmer(mean ~ TP_number + (1 | Trial_number) + (1 | Participant), data = all_CRP_data_final_1200_new_asec, control = lmerControl(optimizer = 'bobyqa'), REML = FALSE)
+summary(mixedmodel0_1200)
+
+sjPlot:: tab_model(mixedmodel0_1200, p.val = "kr",
+                   pred.labels = c("Intercept (No load (L)/No load(R))", "Viscous (L)/Viscous (R)", "Elastic (L)/Elastic (R)","Viscous (L)/No Load (R)", "No Load (L)/Viscous (R)", "Elastic (L)/No Load (R)", "No Load (L)/Elastic (R)", "Viscous (L)/Elastic (R)", "Elastic (L)/Viscous (R)"),
+                   dv.labels= "Mean Anti-Phase CRPΦ - 1200ms Cycling Frequency")
+
+#_____________
+#order: 8,6,14,16,12,10,18,4
+#allconditions_1200 <- c('8' = "Viscous (L)/Viscous (R), '6' = "Elastic (L)/Elastic (R)", '14' = "Viscous (L)/No Load (R)", '16' = "No Load (L)/Viscous (R)", '12' = "Elastic (L)/No Load (R)", '10' = "No Load (L)/Elastic (R)", '18' = "Elastic (L)/Viscous (R)", '4' = "Elastic (L)/Viscous (R)")
+
+#____________
+#This function spits out the random effects estimates for specific participants and items.For linear models, the function returns the fixed effects coefficients; for linear mixed effects models, it returns the random effects estimates! The coef() output is a list, with one list element for every grouping factor. Each list element contains a data frame, which you can retrieve via the dollar sign ‘$’.
+#coef(mixedmodel0_1200)
+
+plot(mixedmodel0_1200)
+#Checking normality of residuals either via:
+#A Q-Q plot 
+qqnorm(resid(mixedmodel0_1200))
+qqline(resid(mixedmodel0_1200))
+#Or a histogram of residuals:
+hist(residuals(mixedmodel0_1200))
+
+library("report")
+report::report(mixedmodel0_1200)
+```
+
+
+
+
+#Here we are going to plot the standard deviation (variability) of varying load conditions and see how the movement varibility increases or decreases whenvarying loads are applied to both arms:
+```{r}
+###MATCHED AND MIS-MATCHED CONDITIONS - 1200MS STANDARD DEVIATION PLOT:
+#Here we are just plotting both the matched and the mismatched load conditions together:
+allconditions_1200 <- c('2' = "No Load (L)/No Load (R)", '4' = "Elastic (L)/Viscous (R)", '6' = "Elastic (L)/Elastic (R)", '8' = "Viscous (L)/Viscous (R)", '10' = "No Load (L)/Elastic (R)", '12' = "Elastic (L)/No Load (R)", '14' = "Viscous (L)/No Load (R)", '16' = "No Load (L)/Viscous (R)", '18' = 'Viscous (L)/Elastic (R)')
+
+allloadconditions_SD_1200ms <- ggplot(all_CRP_data_final_1200_asec, aes(as.factor(TP_number), SD, fill=TP_number)) +
+  geom_flat_violin(position = position_nudge(x = 0.2, y = 0), alpha = 0.6) +
+  geom_jitter(alpha = 0.5,width = 0.15, aes(color=TP_number)) +
+  geom_boxplot(width = 0.25,  outlier.shape = NA, alpha = 0.4) + 
+  stat_summary(fun = mean, geom = "point", col = "black")+
+  stat_summary(fun = mean, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.5, aes(label = paste("Mean:", round(..y.., digits = 1))))+
+  ggtitle(label = "Standard Deviation (SDΦ) All Load Conditons - AntiPhase Mode",
+          subtitle = "(1200ms Cycling Frequency)") +
+  ylab("SDΦ") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  scale_x_discrete(limits = c("2","8","6","14","16","12","10","18","4"), labels = allconditions_1200)+
+  theme_classic() + 
+  coord_flip()+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  ylim(c(0,30))
+allloadconditions_SD_1200ms
+```
+
+
+#Here we are looking at variability for only the 750ms cycling frequency and analyzing that:
+```{r}
+print(CRP_data_final_750ms_intendphase)
+
+final_750ms_intendphase <- ggplot(data = CRP_data_final_750ms_intendphase, mapping = aes(x = TP_number, y = SD, fill = TP_number, alpha = 0.5))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_x_discrete(limits = c("1","7","5","13","15","11","9","17","3"), labels = allconditions_750) +
+    stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.2, hjust=.2, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Variability (SDΦ) All Load Conditons - AntiPhase Movement",
+          subtitle = "(750ms Cycling Frequency)") +
+  ylab("Variability (Degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)") +
+  theme_classic() +
+  theme(legend.position="none") +
+  #theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  coord_flip()+
+  ylim(0, 20)
+final_750ms_intendphase
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("final_750ms_intendphase.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+
+#__________________
+
+hist(CRP_data_final_750ms_intendphase$SD)
+CRP_data_final_750ms_intendphase$TP_number = factor(CRP_data_final_750ms_intendphase$TP_number, levels = c("1", "7","5", "13", "15", "11","9", "17", "3"))
+
+mixmedmodel_variability_750only <- lmer(SD ~ TP_number + (1 | Trial_number) + (1 | Participant), data = CRP_data_final_750ms_intendphase)
+summary(mixmedmodel_variability_750only)
+sjPlot::tab_model(mixmedmodel_variability_750only)
+
+
+plot(mixmedmodel_variability_750only)
+#Checking normality of residuals either via:
+#A Q-Q plot 
+qqnorm(resid(mixmedmodel_variability_750only))
+qqline(resid(mixmedmodel_variability_750only))
+#Or a histogram of residuals:
+hist(residuals(mixmedmodel_variability_750only))
+
+library("report")
+report::report(mixmedmodel_variability_750only)
+```
+```{r}
+print(CRP_data_final_1200ms_intendphase)
+
+final_1200ms_intendphase <- ggplot(data = CRP_data_final_1200ms_intendphase, mapping = aes(x = TP_number, y = SD, fill = TP_number, alpha = 0.5))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_x_discrete(limits = c("2","8","6","14","16","12","10","18","4"), labels = allconditions_1200) +
+    stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.2, hjust=.2, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Variability (SDΦ) All Load Conditons - AntiPhase Movement",
+          subtitle = "(1200ms Cycling Frequency)") +
+  ylab("Variability (Degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)") +
+  theme_classic() +
+  theme(legend.position="none") +
+  #theme(axis.text.x=element_text(angle=45,hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  coord_flip()+
+  ylim(0, 20)
+final_1200ms_intendphase
+
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("final_1200ms_intendphase.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+
+#__________
+hist(CRP_data_final_1200ms_intendphase$SD)
+CRP_data_final_1200ms_intendphase$TP_number = factor(CRP_data_final_1200ms_intendphase$TP_number, levels = c("2","8","6","14","16","12","10","18","4"))
+
+mixmedmodel_variability_1200only <- lmer(SD ~ TP_number + (1 | Trial_number) + (1 | Participant), data = CRP_data_final_1200ms_intendphase)
+summary(mixmedmodel_variability_1200only)
+sjPlot::tab_model(mixmedmodel_variability_1200only)
+
+
+plot(mixmedmodel_variability_1200only)
+#Checking normality of residuals either via:
+#A Q-Q plot 
+qqnorm(resid(mixmedmodel_variability_1200only))
+qqline(resid(mixmedmodel_variability_1200only))
+#Or a histogram of residuals:
+hist(residuals(mixmedmodel_variability_1200only))
+
+library("report")
+report::report(mixmedmodel_variability_1200only)
+
+```
+
+######### NCM POSTER STUFF:
+#Making NCM poster plots with the standard deviation (SDΦ)/variability data:
+```{r}
+
+#750MS CYCLING FREQUENCY:
+final_750ms_intendphase_ncmposter <- ggplot(data = CRP_data_final_750ms_intendphase, mapping = aes(x = TP_number, y = SD, fill = TP_number, alpha = 0.5))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_color_manual(values=c("1" = "#56B4E9", "7" = "#56B4E9","5" = "#56B4E9","13" = "#CC79A7","15" = "#CC79A7","11" = "#CC79A7","9" = "#CC79A7", "17" = "#CC79A7","3" = "#CC79A7"))+
+  scale_x_discrete(limits = c("1","7","5","13","15","11","9","17","3"), labels = allconditions_750) +
+    stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.2, hjust=.2, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Variability of Continuous Relative Phase (SDΦ)",
+          subtitle = "Anti-phase Movement: 750ms Cycling Frequency") +
+  ylab("Variability (Degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)") +
+  geom_hline(yintercept = 0, color = "gray")+
+  geom_text(x=1, y = 1, adj=0, angle= 90, label="Matched Loads", color = "#56B4E9")+
+  geom_text(x=5.5, y = 1, adj=0, angle = 90, label="Mismatched Loads", color = "#CC79A7")+
+  geom_text(x=2, y=12, angle=90, label = "***")+
+  geom_text(x=3, y=20.5,angle = 90, label = "***")+
+  geom_text(x=4, y=14,angle = 90, label = "***")+
+  geom_text(x=5, y=15,angle = 90, label = "***")+
+  geom_text(x=6, y=17,angle = 90, label = "***")+
+  geom_text(x=7, y=18,angle = 90, label = "***")+
+  geom_text(x=8, y=20.5,angle = 90, label = "***")+
+  geom_text(x=9, y=19.5,angle = 90, label = "***")+
+  scale_fill_manual(values = c("1" = "#56B4E9", "7" = "#56B4E9","5" = "#56B4E9","13" = "#CC79A7","15" = "#CC79A7","11" = "#CC79A7","9" = "#CC79A7", "17" = "#CC79A7","3" = "#CC79A7"))+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(hjust=1)) +                  #If you don't want the yaxis use this code: axis.text.x=element_blank()
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  coord_flip()+
+  ylim(0, 20)
+final_750ms_intendphase_ncmposter
+
+#1200MS CYCLING FREQUENCY:
+final_1200ms_intendphase_ncmposter <- ggplot(data = CRP_data_final_1200ms_intendphase, mapping = aes(x = TP_number, y = SD, fill = TP_number, alpha = 0.5))+
+  geom_boxplot(outlier.shape = NA)+
+  geom_jitter(aes(color=TP_number), alpha=0.5)+
+  scale_color_manual(values=c("2" = "#56B4E9", "8" = "#56B4E9","6" = "#56B4E9","14" = "#CC79A7","16" = "#CC79A7","12" = "#CC79A7","10" = "#CC79A7", "18" = "#CC79A7","4" = "#CC79A7"))+
+  scale_x_discrete(limits = c("2","8","6","14","16","12","10","18","4"), labels = allconditions_1200) +
+    stat_summary(fun.data = mean_sdl, mult=1, geom = "pointrange", col = "black")+
+  stat_summary(fun.data = mean_sdl, geom = "text", col = "black",     # Add text to plot
+               vjust = 1.2, hjust=.2, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Variability of Continuous Relative Phase (SDΦ)",
+          subtitle = "Anti-phase Movement: 1200ms Cycling Frequency") +
+  ylab("Variability (Degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)") +
+  geom_hline(yintercept = 0, color = "gray")+
+  geom_text(x=1, y = 1, adj=0, angle= 90, label="Matched Loads", color = "#56B4E9")+
+  geom_text(x=5.5, y = 1, adj=0, angle = 90, label="Mismatched Loads", color = "#CC79A7")+
+  geom_text(x=2, y=12, label = "NS")+
+  geom_text(x=3, y=20.5,angle = 90, label = "***")+
+  geom_text(x=4, y=15,angle = 90, label = "***")+
+  geom_text(x=5, y=14,angle = 90, label = "***")+
+  geom_text(x=6, y=16,angle = 90, label = "***")+
+  geom_text(x=7, y=17,angle = 90, label = "***")+
+  geom_text(x=8, y=18.5,angle = 90, label = "***")+
+  geom_text(x=9, y=19,angle = 90, label = "***")+
+  scale_fill_manual(values = c("2" = "#56B4E9", "8" = "#56B4E9","6" = "#56B4E9","14" = "#CC79A7","16" = "#CC79A7","12" = "#CC79A7","10" = "#CC79A7", "18" = "#CC79A7","4" = "#CC79A7"))+
+  theme_classic() +
+  theme(legend.position="none") +
+  theme(axis.text.x=element_text(hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  theme(legend.position="none")+
+  coord_flip()+
+  ylim(0, 20)
+final_1200ms_intendphase_ncmposter
+
+#Saving the 750ms image:
+#ggsave(file="final_750ms_intendphase_ncmposter.png", width = 7, height = 4, final_750ms_intendphase_ncmposter) #saves final_750ms_intendphase_ncmposter
+
+#Saving the 1200ms image:
+#ggsave(file="final_1200ms_intendphase_ncmposter.png", width = 7, height = 4, final_1200ms_intendphase_ncmposter) #saves final_1200ms_intendphase_ncmposter
+
+
+
+# arrange both plots
+#grid.arrange(final_750ms_intendphase_ncmposter, final_1200ms_intendphase_ncmposter)
+
+#save
+#combined_AP_variability_ncmposer <- arrangeGrob(final_750ms_intendphase_ncmposter, final_1200ms_intendphase_ncmposter) #generates combined_AP_variability_ncmposer
+
+#ggsave(file="combined_AP_variability_ncmposer.pdf", combined_AP_variability_ncmposer) #saves combined_AP_variability_ncmposer
+```
+
+#Here we are plotting the phase deviation information togeher for both the fast and slow cycling frequencies:
+```{r}
+both_1200ms_750ms <- rbind(CRP_data_final_750ms_intendphase, CRP_data_final_1200ms_intendphase)
+print(both_1200ms_750ms)
+
+fastandslow_labels <- c('2' = "No Load (L)/No Load (R)", '4' = "Elastic (L)/Viscous (R)", '6' = "Elastic (L)/Elastic (R)", '8' = "Viscous (L)/Viscous (R)", '10' = "No Load (L)/Elastic (R)", '12' = "Elastic (L)/No Load (R)", '14' = "Viscous (L)/No Load (R)", '16' = "No Load (L)/Viscous (R)", '18' = 'Viscous (L)/Elastic (R)','1' = "No Load (L)/No Load (R)", '3' = "Elastic (L)/Viscous (R)", '5' = "Elastic (L)/Elastic (R)", '7' = "Viscous (L)/Viscous (R)", '9' = "No Load (L)/Elastic (R)", '11' = "Elastic (L)/No Load (R)", '13' = "Viscous (L)/No Load (R)", '15' = "No Load (L)/Viscous (R)", '17' = 'Viscous (L)/Elastic (R)')
+
+both_fastandslow_phasedevplot <- ggplot(data = both_1200ms_750ms, mapping = aes(x = TP_number, y = SD, fill = fast_or_slow))+
+  guides(guides(color = FALSE, size = FALSE))+ #This removes the legends for particular aesthetics (color and size)
+  scale_fill_discrete(name = "Cycling Frequency:", labels = c("750ms Cycling Frequency", "1200ms Cycling Frequency"))+
+  geom_point(aes(color=fast_or_slow), show.legend = FALSE)+
+  geom_violin(aes(color=fast_or_slow),  alpha = 0.5)+
+  #geom_jitter(aes(color=fast_or_slow), alpha=0.5)+
+  scale_x_discrete(limits = c("1","2", "7", "8", "5", "6", "13","14", "15","16", "11","12", "9","10", "17","18","3","4"), labels = fastandslow_labels)+
+  stat_summary(fun = mean, geom = "point", col = "black", size = 2)+
+  stat_summary(fun = mean, geom = "text", col = "black",     # Add text to plot
+               vjust =1.5, aes(label = paste(round(..y.., digits = 1))))+
+  ggtitle(label = "Variability (SDΦ) All Load Conditons - AntiPhase Coordination Mode") +
+  ylab("SDΦ (degrees)") +
+  xlab("Load Condition: Left Arm(L)/Right Arm(R)")+
+  theme_classic() +
+  theme(axis.text.x=element_text(angle=55,hjust=1)) +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5)) +
+  #theme(legend.position="none")+
+  ylim(0, 30) +
+  scale_color_manual(name="Cycling Frequency:",
+                     labels=c("750ms Cycling Frequency", "1200ms Cycling Frequency"),
+                     values=c("tomato", "turquoise3"))+
+  theme(legend.position="bottom", legend.background = element_rect(fill = "white", color = "black"))
+ # facet_grid(~TP_number)
+both_fastandslow_phasedevplot
+
+#Use this code in order to save the plot in 300DPI:
+#ggsave("both_fastandslow_phasedevplot.jpg", width = 7, height = 5, units = c("in"), dpi = 300)
+```
+#In the following portion, I'm running a linear mixed effects model (on the SD/variability of relativphase phase as a fuunction of TP_number, i.e. varying load conditions):
+```{r}
+library(ggprism)
+
+hist(both_1200ms_750ms$SD)
+
+both_1200ms_750ms$TP_number = factor(both_1200ms_750ms$TP_number, levels = c("1", "2", "7", "8", "5", "6", "13", "14", "15", "16", "11", "12", "9", "10", "17", "18", "3", "4"))
+both_1200ms_750ms$fast_or_slow = factor(both_1200ms_750ms$fast_or_slow, levels = c("fast", "slow"))
+
+mixmedmodel_variability <- lmer(SD ~ TP_number + (1 | Trial_number) + (1 | Participant), data = both_1200ms_750ms)
+summary(mixmedmodel_variability)
+sjPlot::tab_model(mixmedmodel_variability)
+
+
+plot(mixmedmodel_variability)
+#Checking normality of residuals either via:
+#A Q-Q plot 
+qqnorm(resid(mixmedmodel_variability))
+qqline(resid(mixmedmodel_variability))
+#Or a histogram of residuals:
+hist(residuals(mixmedmodel_variability))
+
+library("report")
+report::report(mixmedmodel_variability)
+```
+#Here we're doing model comparisons to make sure that the model we have is the best model:
+```{r}
+library(afex)
+mixmedmodel_variability_afex <- mixed(SD ~ TP_number * fast_or_slow + (1 | Trial_number) + (1 | Participant), data = both_1200ms_750ms, control = lmerControl(optimizer = 'bobyqa'), method = 'LRT')
+mixmedmodel_variability_afex
+
+fixef(mixmedmodel_variability_afex$full_model)
+```
+```{r}
+library(ggeffects)
+first_model <- ggemmeans(mixmedmodel_variability, terms = c("TP_number"))
+plot(first_model, facet = TRUE, colors = "hero")
+```
+```{r}
+library(sjPlot)
+sjPlot::plot_model(mixmedmodel_variability, show.values = TRUE, value.offset = .3, vline.color = "yellow", title = "Continuous Relative Phase Estimates", sort.est = TRUE) + theme_bw()
+
+#Spits out a nice table that can be used for presentation purposes:
+sjPlot:: tab_model(mixmedmodel_variability,
+                   dv.labels= "Continuous Relative Phase (CRP)")
+
+
+sjPlot:: tab_model(mixmedmodel_variability, p.val = "kr",
+                   pred.labels = c("Intercept", "No Load(L)/Elastic(R)", "No Load(L)/Viscous(R)", "Viscous(L)/No Load(R)", "Elastic(L)/Viscous(R)","No Load(R)/No Load(L)", "Viscous(L)/Elastic(R)", "Elastic(L)/Elastic(R)", "Viscous(L)/Viscous(R)"),
+                   dv.labels= "Continuous Relative Phase (CRP)")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#In the following portion, I'm running a linear mixed effects models (on the continuous relative phase as a function of TP_number)
+```{r}
+hist(all_CRP_data_final_1200_asec$mean)
+
+
+all_CRP_data_final_1200_asec$TP_number = factor(all_CRP_data_final_1200_asec$TP_number, levels = c("2","8","6","14","16","12","10","18","4"))
+
+mixedmodel1 <- lmer(mean ~ TP_number + (1 | Trial_number) + (1 | Participant), data = all_CRP_data_final_1200_asec)
+summary(mixedmodel1)
+sjPlot::tab_model(mixedmodel1)
+
+
+#To investigate the estimated fixed effects coefficients:
+#fixef(mixedmodel1)
+
+#This function spits out the random effects estimates for specific participants and items.For linear models, the function returns the fixed effects coefficients; for linear mixed effects models, it returns the random effects estimates! The coef() output is a list, with one list element for every grouping factor. Each list element contains a data frame, which you can retrieve via the dollar sign ‘$’.
+#coef(mixedmodel1)
+
+plot(mixedmodel1)
+#Checking normality of residuals either via:
+#A Q-Q plot 
+qqnorm(resid(mixedmodel1))
+qqline(resid(mixedmodel1))
+#Or a histogram of residuals:
+hist(residuals(mixedmodel1))
+
+library("report")
+report::report(mixedmodel1)
+```
+#INTERPRETING THE LMER MODEL:
+#RANDOM EFFECTS:
+- The standard deviation column: measures how much variability in the dependent measure there is due to participants and trial number from 1-90 trials (these are our random effects). In the part_type there is much less variability than participant (which in our case is our "Participant" row). This makes sense because while the trials are all the same, the participants are different. Hence, there's higher variability in between participants.
+- The residuals: stands for the variability that's not due to subject. These are our "random" deviations from the predicted values that are not due to subject or trial number (1-90). Here, this reflects the fact that that there is something else affecting the continuous relative phase measurement, besides participants or trial number that is outside the purview of our experiment.
+- I don't have any correlations in my experiment, hence I won't be talking about them.
+#FIXED EFFECTS:
+- The fixed effects are showing that continuous relative phase in every single load condition either increases or decreases (denoted by the "-" sign). This is a good thing! Because if the relative phase is increasing, especially in mismatched load conditions, it indicates to us that having mismatched forces on both the left and the right hand causes fluctiations in the anti-phase movement. Similarly, if the relative phase decreases, especially in the matched or no load condition, this indicates to us that participants are able to move better (as compared to the mismatched load conditions) in an anti-phase manner in when load conditions are similar. As such, here's the interpretation for every single fixed effect:
+- The no load/elastic conditions is statistically non-significant and positive. (Mismatched, +)
+- The no load/viscous condition is statistically significant and positive. (Mismatched, +)***
+- The viscous/no load contrition is statistically non-significant and positive. (Mismatched, +)
+- The elastic/viscous condition is statistically significant and negative.(Mismatched, -)***
+- The no load/no load condition is statistically significant and positive. (Matched, +)***
+- The viscous/elastic condition is statsitically significant and negative. (Mismatched, -)***
+- The elastic/elastic condition is statistically significant and negative. (Matched, -)***
+- The viscous/viscous condition is statistically signifciant and positive. (Matched, +)***
+
+#Here we are doing a model comparison:
+```{r}
+full_model_1200ms <- lmer(mean ~ TP_number + (1 | Trial_number) + (1 | Participant), data = all_CRP_data_final_1200_asec, control = lmerControl(optimizer = 'bobyqa'))
+
+reduced_model_1200ms <- lmer(mean ~ TP_number + (1 | Trial_number), data = all_CRP_data_final_1200_asec, control = lmerControl(optimizer = 'bobyqa'))
+
+#Before comparing the models here, we need to set the argument to refit=FALSE,because the default on comparing models is to fot models iwth REML=FALSE. So this refit argument prevents the refitting of the models:
+anova(full_model_1200ms, reduced_model_1200ms, refit=FALSE) #The output shows a significant p-value, which suggests that dropping the                                                                 item random effect leads to a significant decrease in likelihood. In other                                                               words, there is sufficient evidence against the null hypothesis of model                                                                equivalence, or, the random effect is ‘significant’.
+
+#For complex models with many fixed effects, it may be quite cumbersome to derive p-values for each predictor via likelihood ratio tests, as this requires specifying many null models. The mixed() function from the afex package (Singmann, Bolker, Westfall, & Aust, 2016) performs likelihood ratio tests automatically for all fixed effects when the argument method = 'LRT' is specified. The model also automatically sum-codes categorical predictors (see Chapter 7) and warns you of continuous predictors that haven’t been centered (see Chapter 5), as this makes the interpretation of interactions difficult (Chapter 8)
+library(afex)
+model_afex_1200ms <- mixed(mean ~ TP_number + (1 | Trial_number) + (1 | Participant), data = all_CRP_data_final_1200_asec, control = lmerControl(optimizer = 'bobyqa'), method = 'LRT')
+model_afex_1200ms
+
+fixef(model_afex_1200ms$full_model)
+```
+
+
+
+```{r}
+library(ggeffects)
+first_model <- ggemmeans(mixedmodel1, terms = c("TP_number"))
+plot(first_model, facet = TRUE, colors = "hero")
+```
+
+```{r}
+library(sjPlot)
+sjPlot::plot_model(mixedmodel1, show.values = TRUE, value.offset = .3, vline.color = "yellow", title = "Continuous Relative Phase Estimates", sort.est = TRUE) + theme_bw()
+
+#Spits out a nice table that can be used for presentation purposes:
+sjPlot:: tab_model(mixedmodel1, p.val = "kr",
+                   pred.labels = c("Intercept", "Viscous(L)/Viscous(R)", "Elastic(L)/Elastic(R)", "Viscous(L)/No Load(R)", "No Load(L)/Viscous(R)","Elastic(R)/No Load(L)", "No Load(L)/Elastic(R)", "Viscous(L)/Elastic(R)", "Elastic(L)/Viscous(R)"),
+                   dv.labels= "Variability in Φ")
+```
